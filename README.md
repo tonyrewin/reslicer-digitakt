@@ -1,7 +1,7 @@
-# digislicer
+# dtslicer
 
 **Beat reslicing for the Digitakt (mk1).** SLICE cuts a sample into 4, 8,
-16, 32 or 64 equal slices. digislicer gives the same knob the divisions of
+16, 32 or 64 equal slices. dtslicer gives the same knob the divisions of
 the beat instead: **1/1, 1/2, 1/4, 1/8, 1/8T, 1/16, 1/32T** and down to
 1/64T, at the project's tempo. A slice is one step of the pattern apart
 from the next, so a loop is resliced as it is heard: the slices keep
@@ -20,8 +20,8 @@ arithmetic. A track on the stock SLICE machine is untouched.
 
 ## What it does
 
-- **The DIGISLICER machine.** Pick it as any machine: FUNC + SRC, then
-  DIGISLICER, below SLICE, in the list. Its SRC page is SLICE's and it
+- **The DTSLICER machine.** Pick it as any machine: FUNC + SRC, then
+  DTSLICER, below SLICE, in the list. Its SRC page is SLICE's and it
   plays as SLICE, so everything SLICE has works on it: TUNE, PLAY, BR,
   SAMP, SLICE, LEN, LEVEL, slice locks, the keyboard, recording.
 - **GRID turns past 64 into the beat.** On this machine the GRID knob
@@ -49,8 +49,8 @@ arithmetic. A track on the stock SLICE machine is untouched.
   ONESHOT or to another machine keeps its GRID value, which the stock
   firmware reads as its largest grid (64).
 - **It leaves room for other mods.** Of the 128 KB of RAM that
-  elekloader's mods share, digislicer takes 72 bytes, and 1.5 KB of the
-  firmware's own code space (934 in `beat.c`, 542 in `glue.s`, measured
+  elekloader's mods share, dtslicer takes 72 bytes, and 1.5 KB of the
+  firmware's own code space (934 in `beat.c`, 540 in `glue.s`, measured
   with `m68k-elf-gcc -Os`). Version 2.x, the slice editor, took 15 KB.
 
 ## Install
@@ -66,12 +66,12 @@ You need three things:
     you also need **core 3.0** for your OS (`core-3.0.elemod` for 1.53,
     `core-3.0-os1.54.elemod` for 1.54) from
     [elekloader's releases](https://github.com/irpina/elekloader/releases),
-    plus **machine-pages** and **seq-events**. digislicer needs all three:
+    plus **machine-pages** and **seq-events**. dtslicer needs all three:
     core for the machine slots, machine-pages to draw the page and extend
     the GRID knob past 64, seq-events for the step counter.
 - **This mod**, from
-  [this repository's releases](https://github.com/irpina/digislicer/releases/latest):
-  `digislicer-3.0.elemod` for OS 1.53, `digislicer-3.0-os1.54.elemod` for
+  [this repository's releases](https://github.com/irpina/dtslicer/releases/latest):
+  `dtslicer-3.0.elemod` for OS 1.53, `dtslicer-3.0-os1.54.elemod` for
   OS 1.54. They are the same mod.
 - **The stock OS file** your unit runs: `Digitakt_OS1.54.syx` or
   `Digitakt_OS1.53.syx`, from
@@ -82,15 +82,15 @@ You need three things:
 Then build your OS in elekloader's window:
 
 1. **Change stock firmware...** (top right): choose your stock OS file.
-2. **+ Install from file...**: choose the digislicer file for that OS, and
+2. **+ Install from file...**: choose the dtslicer file for that OS, and
    core, machine-pages and seq-events the same way. From source, install
    core the same way.
-3. **Tick digislicer.** Its three requirements are ticked with it. The
+3. **Tick dtslicer.** Its three requirements are ticked with it. The
    check below the list should say "No conflicts ... Ready to build". To
    add [digihealth](https://github.com/irpina/digihealth) (FAST AUDIO and
    SYSTEM INFO), install and tick it as well.
 4. **OS version shown**: the 4 characters the unit will show, for example
-   `DS22`.
+   `DTS3`.
 5. **BUILD FIRMWARE**, and save the `.syx`. elekloader verifies it before
    writing it.
 
@@ -110,9 +110,9 @@ Ubuntu, `apt install binutils-m68k-linux-gnu gcc-m68k-linux-gnu`; on
 Windows, inside WSL) and elekloader:
 
 ```bash
-python -m elekloader.sdk.build . --stock Digitakt_OS1.53.syx       # -> out/digislicer-3.0.elemod
-python -m elekloader.sdk.build . --stock Digitakt_OS1.54.syx       # -> out/digislicer-3.0-os1.54.elemod
-python -m elekloader.lint out/digislicer-3.0-os1.54.elemod --stock Digitakt_OS1.54.syx \
+python -m elekloader.sdk.build . --stock Digitakt_OS1.53.syx       # -> out/dtslicer-3.0.elemod
+python -m elekloader.sdk.build . --stock Digitakt_OS1.54.syx       # -> out/dtslicer-3.0-os1.54.elemod
+python -m elekloader.lint out/dtslicer-3.0-os1.54.elemod --stock Digitakt_OS1.54.syx \
     --with core-3.0-os1.54.elemod --with machine-pages-1.0-os1.54.elemod --with seq-events-1.0-os1.54.elemod
 ```
 
@@ -127,7 +127,7 @@ m68k-elf-gcc -Os -I <elekloader>/sdk/include -c glue.s -o glue.o && m68k-elf-siz
 |---|---|
 | `mod.json` | the mod: its one patched site, its handlers, its machine, what it requires |
 | `beat.c` | the divisions, the tempo measurement, the slice window |
-| `glue.s` | the DIGISLICER machine (its core descriptor, icon and page: GRID's range to 1/64T) and the patched SLICE window function |
+| `glue.s` | the DTSLICER machine (its core descriptor, icon and page: GRID's range to 1/64T) and the patched SLICE window function |
 | `os153.inc`, `os154.inc` | the stock locations `glue.s` uses, for each OS (1.54's port defines `OS154`) |
 | `os153.h`, `os154.h` | the same for `beat.c` |
 | `tests/beat.c` | `beat.c`'s arithmetic on the host: no firmware, no device |
@@ -156,7 +156,7 @@ loaded: 256 positions per sample slot, and GRID says which of the 4, 8,
 16, 32 or 64 cells of that grid to take. That function is the only thing
 this mod patches.
 
-On a DIGISLICER voice whose GRID is 5 or up, and once a tempo has been
+On a DTSLICER voice whose GRID is 5 or up, and once a tempo has been
 measured, the call goes to `beat_win` instead, with the same arguments
 and the same result. It reads the voice's GRID, SLICE, LEN, PLAY and
 note, works out
@@ -193,16 +193,16 @@ holds is its rate at its own pitch, which scales the grid.
 
 ## From 2.x
 
-2.x was a slicer: it analysed transients (GRID = AUTO), kept per-sample
-slice points in a store on the +Drive (`/cfw/slices.a`, `.b`), had a
-waveform editor with zoom, menus and audition, added a ping-pong loop
-(PLAY = PIPO) and a trig slice mode for the keyboard. All of that is gone
-in 3.0: it is 1.3 KB of firmware instead of 15 KB, and it does one
-thing.
+2.x, called digislicer, was a slicer: it analysed transients (GRID =
+AUTO), kept per-sample slice points in a store on the +Drive (`/cfw/
+slices.a`, `.b`), had a waveform editor with zoom, menus and audition,
+added a ping-pong loop (PLAY = PIPO) and a trig slice mode for the
+keyboard. All of that is gone in 3.0: it is 1.5 KB of firmware instead
+of 15 KB, and it does one thing.
 
-A project saved with 2.x still loads: it keeps its DIGISLICER tracks, and
+A project saved with 2.x still loads: it keeps its DTSLICER tracks, and
 they play. The stock SLICE machine was never touched by either version,
-and a 2.x DIGISLICER track's own slices play as stock slices do (its GRID
+and a 2.x DTSLICER track's own slices play as stock slices do (its GRID
 reads as 64). Nothing is lost but the feature itself: `AUTO` is the
 stock equal grid now, `PIPO` is stock `FWD.L`, and the editor and the
 +Drive folder are gone with the files `/cfw/slices.a`, `/cfw/slices.b`.

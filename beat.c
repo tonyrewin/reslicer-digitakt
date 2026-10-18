@@ -2,7 +2,7 @@
 /* beat.c: beat reslicing for the SLICE machine (GRID = BEAT).
  *
  * Stock SLICE (machine type 3) divides a sample into 4, 8, 16, 32 or 64
- * equal slices: GRID 0-4. This mod gives GRID 5 and up, on the DIGISLICER
+ * equal slices: GRID 0-4. This mod gives GRID 5 and up, on the DTSLICER
  * machine, the divisions of the beat instead: a slice is one step of the
  * pattern apart from the next, so the sample is resliced as 1/8, 1/16,
  * 1/8T and so on at the project's tempo, and the slices keep their place
