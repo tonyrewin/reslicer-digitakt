@@ -5,5 +5,6 @@
 #define RESLICER_OS153_H
 
 #define OS_PP_POS 0x8000EDC8u        /* V(v) + 4: a voice's position, V = 0x8000EDC4 + 94 v */
+#define OS_PP_TRIG 0x80001228u       /* bit v: a voice v starts */
 
 #endif

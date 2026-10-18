@@ -14,10 +14,21 @@
 | Machine 5, through core's machine slots (core 2.1, docs/ADAPTING.md "SRC
 | machines"): SLICE's parameters and SRC page, and it plays as SLICE (the
 | render sees 3), so everything SLICE has works on it. What this mod adds
-| is GRID's extra values, the divisions of the beat: stock's range is 0-4
-| (4, 8, 16, 32, 64 equal slices) and this page runs it to 0x500, so the
-| knob turns past 64 to 1/1, 1/8, 1/16T. Their text is beat.c's beat_fmt,
-| and the window function below reads them.
+| is GRID's extra values, the divisions of the beat in two placements:
+| stock's range is 0-4 (4, 8, 16, 32, 64 equal slices) and this page runs
+| it to 0x1400 (20), so the knob turns past 64 to
+|
+|   5-12   1/1 1/2 1/4 1/4T 1/8 1/8T 1/16 1/16T   from the sample's start
+|  13-20   N1/1 N1/2 ... N1/16 N16T              from the note's start
+|
+| The N values are the same divisions placed from where the playhead was
+| when the note fired, so every note begins on a boundary and keeps its
+| place on the beat (beat.c). Their text is beat.c's beat_fmt, and the
+| window function below reads the values.
+|
+| The stock sizes the SLICE knob as 4 << GRID in 8.8, so GRID stops at 20:
+| 4 << 20 would be past the knob's own arithmetic. GRID above 20 clamps to
+| the last division rather than reading past the table.
 |
 | The stock SLICE machine is left as it is, so a track that switches to
 | ONESHOT or to another machine loses the divisions with the machine: the
@@ -37,7 +48,7 @@ rs_page:
         CM_KNOB                                         | D: SAMP
         CM_KNOB                                         | E: SLICE
         CM_KNOB                                         | F: LEN
-        CM_KNOB flags=CM_RANGE, min=0, max=0x500, fmt=beat_fmt
+        CM_KNOB flags=CM_RANGE, min=0, max=0x1400, fmt=beat_fmt
                                                         | G: GRID, to BEAT
         CM_KNOB                                         | H: LEV
 | Its menu icon, 11 x 7 as the stock ones (a word a column, rows in bits

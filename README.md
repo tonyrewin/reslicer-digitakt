@@ -25,12 +25,29 @@ arithmetic. A track on the stock SLICE machine is untouched.
   plays as SLICE, so everything SLICE has works on it: TUNE, PLAY, BR,
   SAMP, SLICE, LEN, LEVEL, slice locks, the keyboard, recording.
 - **GRID turns past 64 into the beat.** On this machine the GRID knob
-  runs from 4, 8, 16, 32, 64 (the stock values) to `1/1`, `1/1T`, `1/2`,
-  `1/2T`, `1/4`, `1/4T`, `1/8`, `1/8T`, `1/16`, `1/16T`, `1/32`,
-  `1/32T`, `1/64`, `1/64T`. Whatever the division, the sample is cut into
-  slices exactly that long, and the slice number (the SLICE knob, the
-  note when SLICE is 0, the LEN knob's span) picks among them as it does
-  on the stock machine.
+  runs from 4, 8, 16, 32, 64 (the stock values) into the divisions of the
+  beat, twice over:
+
+  | GRID | text | the grid starts |
+  |---|---|---|
+  | 5-12 | `1/1 1/2 1/4 1/4T 1/8 1/8T 1/16 1/16T` | at the sample's start |
+  | 13-20 | `N1/1 N1/2 N1/4 N1/4T N1/8 N1/8T N1/16 N16T` | at the note's start |
+
+  Whatever the division, a slice is exactly that long at the project's
+  tempo, and the slice number (the SLICE knob, the note when SLICE is 0,
+  the LEN knob's span) picks among them as on the stock machine.
+- **The two placements, and which to use.** The plain values put the
+  grid at the start of the file, as the stock does: slice 5 is always the
+  same hit, whatever note asks for it. The `N` values put it at the first
+  slice boundary at or after where the playhead stood when the note
+  fired, so every note begins on a boundary and each slice after it is
+  one step later. Use the plain ones when the sample starts on the
+  downbeat; use the `N` ones when it does not, or when the loop is not a
+  whole number of bars — there the plain grid walks off the beat and the
+  `N` grid stays on it. The same slice number then means a different hit
+  depending on when the note fired, which is the point.
+  - The ladder stops at 1/16T because the stock sizes the SLICE knob as
+    4 << GRID in 8.8; 1/32 and finer do not fit that arithmetic.
 - **The tempo is the project's, measured as it plays.** The mod counts
   the steps the sequencer fires and times them against the UI task's
   30 Hz tick, which is 1600 samples at 48 kHz: a division is that many
@@ -49,11 +66,11 @@ arithmetic. A track on the stock SLICE machine is untouched.
   ONESHOT or to another machine keeps its GRID value, which the stock
   firmware reads as its largest grid (64).
 - **It leaves room for other mods.** Of the 128 KB of RAM that
-  elekloader's mods share, reslicer takes 72 bytes, and 1.5 KB of the
-  firmware's own code space (934 in `beat.c`, 540 in `glue.s`, measured
-  with `m68k-elf-gcc -Os`; the built `.elemod` says `.run` 1356,
-  `.bss` 72). A firmware with reslicer, core, machine-pages and
-  seq-events links at 18 740 of 262 144 bytes of RAM, 0 of 2304 of fast
+  elekloader's mods share, reslicer takes 104 bytes, and 1.6 KB of the
+  firmware's own code space (952 in `beat.c`, 540 in `glue.s`, measured
+  with `m68k-elf-gcc -Os`; the built `.elemod` says `.run` 1444,
+  `.bss` 104). A firmware with reslicer, core, machine-pages and
+  seq-events links at 18 772 of 262 144 bytes of RAM, 0 of 2304 of fast
   SRAM. digislicer, the older slicer, took 15 KB.
 
 ## Install
@@ -165,10 +182,11 @@ firmware's addresses and its render do not exist:
 cc -O1 -I . -o /tmp/beat-test tests/beat.c && /tmp/beat-test
 ```
 
-It covers the division ladder against the beat, which slice the voice's
-SLICE, LEN, PLAY and note pick, the last slice and the wrap, a pitched
-voice, the tempo meter's accuracy over the Digitakt's tempo range, and
-every GRID text. It says nothing about the firmware: for that the mod has
+It covers the division ladder against the beat, both grid placements
+(SAMPLE and the N latch, including a note that fires off a boundary and
+one that fires on it), which slice the voice's SLICE, LEN, PLAY and note
+pick, the last slice and the wrap, a pitched voice, the tempo meter's
+accuracy over the Digitakt's tempo range, and every GRID text. It says nothing about the firmware: for that the mod has
 to be built with [elekloader](https://github.com/irpina/elekloader) and
 played, which has not been done for 1.0.
 
@@ -189,9 +207,11 @@ note, works out
 
 and returns `k x a division` to `(k + LEN + 1) x a division`, wrapped to
 the sample's length, the last slice running to its end, reversed for
-PLAY's REV modes. Nothing is stored, so a different sample, division or
-tempo is one multiply away, and the render costs the same for all of
-them.
+PLAY's REV modes. The `N` placements add one latch per voice: on the
+block a trig bit is set (`OS_PP_TRIG`), the grid's zero becomes the first
+boundary at or after the playhead, and it holds until the next note.
+Nothing is stored, so a different sample, division, tempo or placement is
+one multiply away, and the render costs the same for all of them.
 
 The tempo comes out of two counters: `ev_fire_step` (seq-events) counts
 the steps the sequencer fires, one call each, exactly, and `ev_tick` (the

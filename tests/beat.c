@@ -6,14 +6,18 @@
  *     cc -O1 -I . -o /tmp/beat-test tests/beat.c && /tmp/beat-test
  *
  * It covers the division ladder, which slice the voice's parameters pick,
- * LEN's span, PLAY's reverse, the pitch and the tempo, the tempo meter's
- * accuracy over the Digitakt's range, and the GRID knob's texts. It says
- * nothing about the firmware: for that, build the mod and try it. */
+ * LEN's span, PLAY's reverse, the pitch, both grid placements, the tempo
+ * meter's accuracy over the Digitakt's range, and the GRID knob's texts.
+ * It says nothing about the firmware: for that, build the mod and try it. */
 #include <stdio.h>
 #include <string.h>
 typedef int s32;                    /* beat.c's own typedefs come after */
+typedef unsigned int u32;           /* ... and this one too */
 static s32 test_pos;               /* the firmware's address has no host */
+static u32 test_trig;              /* bit v: a voice starts */
+static u32 test_len;
 #define VOICE_POS(v) (test_pos)
+#define PP_TRIG(v) (test_trig >> (v) & 1)
 #include "../beat.c"
 
 static s8 par[16];
@@ -39,6 +43,16 @@ static void show(const char *what, u32 len, int play, int slice, int l, int grid
            what, grid, slice, l, note, from, to, to - from);
 }
 
+/* fire a note: the render sets the position after this call, so a test does
+ * it by hand, the way the render does */
+static void fire(u32 from)
+{
+    test_trig = 1;
+    beat_win(par, 60 << 16, test_len, 0);
+    test_trig = 0;
+    test_pos = (s32)from;
+}
+
 /* feed the tempo meter a tempo for `ticks` ticks, 30 a second */
 static void meter(double bpm, int ticks)
 {
@@ -57,40 +71,42 @@ static void meter(double bpm, int ticks)
 
 int main(void)
 {
-    u32 old, r;
+    u32 r, old;
     u64 w;
     int ok = 1;
 
     /* 120 BPM at 48 kHz: a beat is 24000 samples, a bar 96000, a step
      * (a 1/16 note) 6000. The sample is two bars. */
     bt_spp = 6000;
+    test_len = 192000;
     memset(bt_pos, 0, sizeof bt_pos);
     memset(bt_rate, 0, sizeof bt_rate);
+    memset(bt_phase, 0, sizeof bt_phase);
     bt_rate[0] = 256;                        /* the voice at its own pitch */
 
-    puts("-- the ladder, one slice from the start, two bars at 120 BPM --");
+    puts("-- the ladder, from the sample's start, slice 1, two bars at 120 --");
     show("GRID 5  1/1",   192000, 3, 1, 0, 5, 60);
     show("GRID 7  1/2",   192000, 3, 1, 0, 7, 60);
     show("GRID 8  1/2T",  192000, 3, 1, 0, 8, 60);
     show("GRID 9  1/4",   192000, 3, 1, 0, 9, 60);
     show("GRID 11 1/8",   192000, 3, 1, 0, 11, 60);
     show("GRID 12 1/8T",  192000, 3, 1, 0, 12, 60);
-    show("GRID 13 1/16",  192000, 3, 1, 0, 13, 60);
-    show("GRID 15 1/32",  192000, 3, 1, 0, 15, 60);
-    show("GRID 17 1/64",  192000, 3, 1, 0, 17, 60);
-    show("GRID 20 past 1/64T", 192000, 3, 1, 0, 20, 60);
+    show("GRID 13 ...",   192000, 3, 1, 0, 13, 60);
+    show("GRID 19 (N1/8)", 192000, 3, 1, 0, 19, 60);
+    show("GRID 20 (N1/16T)", 192000, 3, 1, 0, 20, 60);
+    show("GRID 25 past the table", 192000, 3, 1, 0, 25, 60);
 
     puts("\n-- picking slices at 1/16 (32 slices in two bars) --");
-    show("slice 1",       192000, 3, 1,  0, 13, 60);
-    show("slice 5",       192000, 3, 5,  0, 13, 60);
-    show("slice 32 (last)", 192000, 3, 32, 0, 13, 60);
-    show("slice 33 wraps", 192000, 3, 33, 0, 13, 60);
-    show("slice 1, LEN 3", 192000, 3, 1,  3, 13, 60);
-    show("slice 1, LEN 63", 192000, 3, 1, 63, 13, 60);
-    show("slice 0, note 44", 192000, 3, 0, 0, 13, 44);
-    show("slice 0, note 45", 192000, 3, 0, 0, 13, 45);
-    show("PLAY 1 (REV)",  192000, 1, 1,  0, 13, 60);
-    show("half a bar",     48000, 3, 1,  0, 13, 60);
+    show("slice 1",       192000, 3, 1,  0, 11, 60);
+    show("slice 5",       192000, 3, 5,  0, 11, 60);
+    show("slice 32 (last)", 192000, 3, 32, 0, 11, 60);
+    show("slice 33 wraps", 192000, 3, 33, 0, 11, 60);
+    show("slice 1, LEN 3", 192000, 3, 1,  3, 11, 60);
+    show("slice 1, LEN 63", 192000, 3, 1, 63, 11, 60);
+    show("slice 0, note 44", 192000, 3, 0, 0, 11, 44);
+    show("slice 0, note 45", 192000, 3, 0, 0, 11, 45);
+    show("PLAY 1 (REV)",  192000, 1, 1,  0, 11, 60);
+    show("half a bar",     48000, 3, 1,  0, 11, 60);
     show("1/1 on one beat", 24000, 3, 1,  0, 5,  60);
 
     puts("\n-- the tempo and the pitch move the grid --");
@@ -102,6 +118,53 @@ int main(void)
     bt_rate[0] = 128;
     show("1/8, voice at 0.5x", 192000, 3, 1, 0, 11, 60);
     bt_rate[0] = r;
+
+    puts("\n-- GRID 13-20: from the note, the phase is where it fired --");
+    bt_spp = 6000; bt_rate[0] = 256;
+    /* A note fired at sample 3000 (half a 1/16 step in): slice 1 must start
+     * at the next boundary, 6000, and slice 2 one step after that. */
+    setp(3, 1, 0, 19);                        /* N1/8 */
+    test_pos = 3000;
+    fire(3000);
+    w = beat_win(par, 60 << 16, 192000, 0);
+    printf("%s N1/8 fired at 3000: slice 1 at %u..%u (want 6000..12000)\n",
+           ((u32)(w >> 32) == 6000 && (u32)w == 12000) ? "ok  " : "FAIL",
+           (u32)(w >> 32), (u32)w);
+    ok &= (u32)(w >> 32) == 6000 && (u32)w == 12000;
+
+    /* Fired exactly on a boundary: slice 1 starts there. */
+    setp(3, 1, 0, 19);
+    test_pos = 12000;
+    fire(12000);
+    w = beat_win(par, 60 << 16, 192000, 0);
+    printf("%s N1/8 fired on a boundary: %u..%u (want 12000..18000)\n",
+           ((u32)(w >> 32) == 12000 && (u32)w == 18000) ? "ok  " : "FAIL",
+           (u32)(w >> 32), (u32)w);
+    ok &= (u32)(w >> 32) == 12000 && (u32)w == 18000;
+
+    /* The phase holds for the whole note, and LEN counts steps from it. */
+    setp(3, 1, 2, 19);                        /* N1/8, LEN 2 */
+    test_pos = 12000;
+    fire(12000);
+    w = beat_win(par, 60 << 16, 192000, 0);
+    printf("%s N1/8 LEN 2 spans three: %u..%u (want 12000..30000)\n",
+           ((u32)(w >> 32) == 12000 && (u32)w == 30000) ? "ok  " : "FAIL",
+           (u32)(w >> 32), (u32)w);
+    ok &= (u32)(w >> 32) == 12000 && (u32)w == 30000;
+    /* The next block of the same note must not move the phase. */
+    w = beat_win(par, 60 << 16, 192000, 0);
+    printf("%s ... and the next block holds it: %u..%u\n",
+           ((u32)(w >> 32) == 12000 && (u32)w == 30000) ? "ok  " : "FAIL",
+           (u32)(w >> 32), (u32)w);
+    ok &= (u32)(w >> 32) == 12000 && (u32)w == 30000;
+
+    /* From the sample (GRID 11) the same note plays from the file's start. */
+    setp(3, 5, 0, 11);
+    test_pos = 12000;
+    w = beat_win(par, 60 << 16, 192000, 0);
+    printf("%s 1/16 slice 5 is 24000..30000 whatever fired\n",
+           ((u32)(w >> 32) == 24000 && (u32)w == 30000) ? "ok  " : "FAIL");
+    ok &= (u32)(w >> 32) == 24000 && (u32)w == 30000;
 
     puts("\n-- the checks --");
     bt_spp = 6000; bt_rate[0] = 256;
@@ -118,15 +181,15 @@ int main(void)
         }                                                                          \
     } while (0)
     CHECK(0, 96000, "1/1 is two bars at 120 BPM", 5, 1, 0, 60);
-    CHECK(0, 6000, "1/16 slice 1", 13, 1, 0, 60);
-    CHECK(24000, 30000, "1/16 slice 5", 13, 5, 0, 60);
-    CHECK(186000, 192000, "1/16 slice 32 ends the sample", 13, 32, 0, 60);
-    CHECK(0, 6000, "1/16 slice 33 wraps to 1", 13, 33, 0, 60);
-    CHECK(0, 24000, "LEN 3 spans four 1/16 slices", 13, 1, 3, 60);
-    CHECK(0, 192000, "LEN 63 stops at the sample's end", 13, 1, 63, 60);
-    CHECK(0, 6000, "SLICE 0, note 44 (44-12 = 32, one loop)", 13, 0, 0, 44);
-    CHECK(6000, 12000, "SLICE 0, note 45 (33, slice 2)", 13, 0, 0, 45);
-    setp(3, 1, 0, 13);
+    CHECK(0, 6000, "1/16 slice 1", 11, 1, 0, 60);
+    CHECK(24000, 30000, "1/16 slice 5", 11, 5, 0, 60);
+    CHECK(186000, 192000, "1/16 slice 32 ends the sample", 11, 32, 0, 60);
+    CHECK(0, 6000, "1/16 slice 33 wraps to 1", 11, 33, 0, 60);
+    CHECK(0, 24000, "LEN 3 spans four 1/16 slices", 11, 1, 3, 60);
+    CHECK(0, 192000, "LEN 63 stops at the sample's end", 11, 1, 63, 60);
+    CHECK(0, 6000, "SLICE 0, note 44 (44-12 = 32, one loop)", 11, 0, 0, 44);
+    CHECK(6000, 12000, "SLICE 0, note 45 (33, slice 2)", 11, 0, 0, 45);
+    setp(3, 1, 0, 11);
     w = beat_win(par, 60 << 16, 192000, 9);
     if ((u32)(w >> 32) == 0 && (u32)w == 192000)
         printf("ok   a voice outside 0..7 gets the whole sample\n");
@@ -134,7 +197,7 @@ int main(void)
         printf("FAIL a voice outside 0..7: got %u..%u\n", (u32)(w >> 32), (u32)w);
         ok = 0;
     }
-    setp(1, 1, 0, 13);
+    setp(1, 1, 0, 11);
     w = beat_win(par, 60 << 16, 192000, 0);
     if ((u32)(w >> 32) == 6000 && (u32)w == 0)
         printf("ok   PLAY 1 returns the window backwards\n");
@@ -177,7 +240,7 @@ int main(void)
     {
         char buf[32];
         u32 i;
-        for (i = 0; i < 20; i++) {
+        for (i = 0; i < 26; i++) {
             memset(buf, 0, sizeof buf);
             if (beat_fmt(buf, i << 8, 0, 0))
                 printf("GRID %-2u %s\n", i, buf);

@@ -8,11 +8,20 @@
  * 1/8T and so on at the project's tempo, and the slices keep their place
  * when the tempo changes.
  *
+ * Two placements of that grid, both on GRID, chosen by the range:
+ *   - GRID 5-12 (SAMPLE): from the start of the file, as the stock grid
+ *     is. Slice k is always the same hit, whatever note asks for it.
+ *   - GRID 13-20 (NOTE): from where the voice's playhead was when the
+ *     note fired, so every note starts on a slice boundary and keeps its
+ *     place on the beat even when the sample's start is not the downbeat
+ *     or its length is not a whole number of bars. The same slice number
+ *     then walks the sample as the pattern plays.
+ *
  * Nothing is stored, nothing is analysed, no sample is managed and no
  * memory is taken. The SLICE window function at 0x40074df2, hooked by
- * glue.s, is handed the voice and does the arithmetic: the slice starts
- * are k * (a step in samples). The only thing measured is the tempo, from
- * the sequencer's own clock, and the voice's speed, from its position.
+ * glue.s, is handed the voice and does the arithmetic. The only things
+ * measured are the tempo, from the sequencer's own clock, and the voice's
+ * speed, from its position.
  */
 #ifdef OS154                       /* the Digitakt mk1 1.54 (mod.json's port) */
 #include "os154.h"
@@ -30,21 +39,27 @@ typedef unsigned long long u64;
 
 /* ---- the divisions -------------------------------------------------------- */
 /* GRID 5 and up: one slice per step of the pattern (a step is a 1/16
- * note), or per two, four ... of them, or per a triplet. The table is
- * steps per division in 1/256 of a step: a 1/8 is two steps, 512. */
+ * note), or per two or four of them, or per a triplet. The table is steps
+ * per division in 1/256 of a step: a 1/8 is two steps, 512.
+|
+ * The ladder stops at 1/16T because the stock sizes the SLICE knob as
+ * 4 << GRID in 8.8: 4 << 12 is 64.0, 4 << 13 would be its sign bit. */
 #define BEAT0   5                     /* the first GRID value that is a beat */
-#define NDIV    14
+#define NOTE0   13                    /* the first NOTE-placed division */
+#define NDIV    8
 static const u16 div_step[NDIV] = {
-    4096, 2731, 2048, 1365, 1024, 683, 512,
-    341, 256, 171, 128, 85, 64, 43
+    4096, 2048, 1024, 683, 512, 341, 256, 171
 };
-/* the names, six bytes each so that one offset indexes them */
+/* The knob names, six bytes each so one offset indexes them: SAMPLE keeps
+ * the division ("1/8"), NOTE marks it with a leading N ("N1/8"). The
+ * popup shows the same; the README says what N means. */
 #define DIV_NAME(i) (div_name + 6 * (i))
 static const char div_name[6 * NDIV] =
-    "1/1\0\0\0"   "1/1T\0\0"  "1/2\0\0\0"   "1/2T\0\0"
-    "1/4\0\0\0"   "1/4T\0\0"  "1/8\0\0\0"   "1/8T\0\0"
-    "1/16\0\0"    "1/16T\0"   "1/32\0\0"    "1/32T\0"
-    "1/64\0\0"    "1/64T\0";
+    "1/1\0\0\0" "1/2\0\0\0" "1/4\0\0\0" "1/4T\0\0"
+    "1/8\0\0\0" "1/8T\0\0" "1/16\0\0" "1/16T\0";
+static const char div_name_note[6 * NDIV] =
+    "N1/1\0\0" "N1/2\0\0" "N1/4\0\0" "N1/4T\0"
+    "N1/8\0\0" "N1/8T\0"  "N1/16\0"  "N16T\0";
 
 /* ---- the tempo: samples a step takes -------------------------------------- */
 /* The UI task ticks 30 times a second and the render runs at 48 kHz, so a
@@ -53,19 +68,19 @@ static const char div_name[6 * NDIV] =
  * a window of ticks with the steps in it gives the samples a step takes.
 |
  * Both windows are closed by the ticks and never by a step count: closing
- * on a step count would put the window's span on a step's edge, and the
- * tick it landed on would then be the same every window, a tempo's worth
- * of error every time. Closed by the ticks, a window is as long as the
- * counter says, and the steps inside it are counted exactly.
+ * on a step count would put the window's span on a step's edge, and
+ * the tick it landed on would then be the same every window, a tempo's
+ * worth of error every time. Closed by the ticks, a window is as long as
+ * the counter says, and the steps inside it are counted exactly.
 |
  * What is left is that a window holds a whole number of steps and a
  * fraction of one, so the count is one step out either way. A window of a
  * hundred steps is a percent, of forty steps 2.5%. So a window's length
- * wanders by up to sixteen ticks (DITHER), which keeps the steps' phase
- * against the ticks from being the same twice running and turns that
- * rounding from a bias into something the average takes away, and a
- * window only speaks once it holds FAST_MIN steps, whose one step is
- * narrower than the change it is read for.
+ * therefore wanders by up to sixteen ticks (DITHER), which keeps the
+ * steps' phase against the ticks from being the same twice running and
+ * turns that rounding from a bias into something the average takes away,
+ * and a window only speaks once it holds FAST_MIN steps, whose one step
+ * is narrower than the change it is read for.
 |
  * The fast window is for following the user: a tempo a fortieth from the
  * last is one they have moved, and is taken at once. The slow one is the
@@ -146,14 +161,18 @@ void beat_tick(void)
 #ifndef VOICE_POS                 /* a host test (tests/beat.c) replaces it */
 #define VOICE_POS(v) (*(volatile s32 *)(OS_PP_POS + 94 * (v)))
 #endif
+#ifndef PP_TRIG                  /* bit v: a voice v starts (tests too) */
+#define PP_TRIG(v) (*(volatile u32 *)OS_PP_TRIG >> (v) & 1)
+#endif
 
 static u32 bt_pos[8];              /* the voice's position when it was here */
 static u16 bt_rate[8];             /* the frames it eats a sample, 1/256 */
+static u32 bt_phase[8];            /* NOTE mode: where slice 0 was placed */
 
 u64 beat_win(const s8 *p, u32 note, u32 len, s32 v)
 {
     u32 g = (u8)p[12], i, step, n, from, to, pos, d, r;
-    s32 k, sel = (u8)p[8], L = (u8)p[10];
+    s32 k, sel = (u8)p[8], L = (u8)p[10], note_mode;
 
     if (v < 0 || v > 7)
         return len;                 /* not one of the voices: all of it */
@@ -171,9 +190,11 @@ u64 beat_win(const s8 *p, u32 note, u32 len, s32 v)
         bt_rate[v] = bt_rate[v] ? (bt_rate[v] * 3 + r) / 4 : r;
     }
 
+    note_mode = g >= NOTE0;
+
     /* A division in samples: a step, times the table, times the voice's
      * rate, so a pitched sample's slices are a beat long as played. */
-    i = g - BEAT0;
+    i = (u32)(note_mode ? g - NOTE0 : g - BEAT0);
     if (i >= NDIV)
         i = NDIV - 1;
     step = bt_spp * div_step[i] >> 8;
@@ -193,8 +214,27 @@ u64 beat_win(const s8 *p, u32 note, u32 len, s32 v)
         if (k < 0)
             k += n;
     }
-    from = (u32)k * step;
-    to = (u32)(k + L + 1) < n ? (u32)(k + L + 1) * step : len;
+
+    /* NOTE mode: the grid's zero is the first boundary at or after where
+     * the playhead stood when the note fired, so the note begins on a
+     * slice and each slice after it is one step (or one 1/8, two steps)
+     * later. The render sets the position after this call, so on the block
+     * a trig bit is set the position still reads where the last note
+     * ended: that is the input this wants. Latched, so it holds for the
+     * whole note and moves on the next trig.
+     *
+     * The boundary is pos rounded up to the next multiple of step, and
+     * pos itself when it is already on one. */
+    if (note_mode && step < len) {
+        if (PP_TRIG(v))
+            bt_phase[v] = (pos + step - 1) / step * step;
+        from = bt_phase[v] + (u32)k * step;
+        if (from >= len)
+            from -= len;            /* phase is under a step, k is under n */
+    } else {
+        from = (u32)k * step;
+    }
+    to = from + (u32)(L + 1) * step;
     if (to > len)
         to = len;
     if (to <= from)
@@ -216,10 +256,13 @@ s32 beat_fmt(char *buf, s32 value, s32 ctx, s32 machine)
     (void)machine;
     if (i < BEAT0)
         return 0;
-    i -= BEAT0;
-    if (i >= NDIV)
-        i = NDIV - 1;
-    s = DIV_NAME(i);
+    if (i >= NOTE0) {
+        i -= NOTE0;
+        s = div_name_note + 6 * (i >= NDIV ? NDIV - 1 : i);
+    } else {
+        i -= BEAT0;
+        s = div_name + 6 * (i >= NDIV ? NDIV - 1 : i);
+    }
     for (n = 0; n < 5 && s[n]; n++)
         buf[n] = s[n];
     buf[n] = 0;
