@@ -54,7 +54,7 @@ arithmetic. A track on the stock SLICE machine is untouched.
   with `m68k-elf-gcc -Os`; the built `.elemod` says `.run` 1356,
   `.bss` 72). A firmware with reslicer, core, machine-pages and
   seq-events links at 18 740 of 262 144 bytes of RAM, 0 of 2304 of fast
-  SRAM. Version 2.x, the slice editor, took 15 KB.
+  SRAM. digislicer, the older slicer, took 15 KB.
 
 ## Install
 
@@ -66,15 +66,17 @@ You need three things:
     needs, is built in.
   - **Other systems:** run elekloader from source with Python 3.9 or newer
     (see [its README](https://github.com/irpina/elekloader#install)). There
-    you also need **core 3.0** for your OS (`core-3.0.elemod` for 1.53,
-    `core-3.0-os1.54.elemod` for 1.54) from
-    [elekloader's releases](https://github.com/irpina/elekloader/releases),
-    plus **machine-pages** and **seq-events**. reslicer needs all three:
-    core for the machine slots, machine-pages to draw the page and extend
-    the GRID knob past 64, seq-events for the step counter.
+    you also need **core 4.0** for your OS, plus **machine-pages 1.2**
+    and **seq-events 0.1**. They are mods in
+    [elekloader's source](https://github.com/irpina/elekloader/tree/master/mods)
+    (`mods/core`, `mods/machine-pages`, `mods/seq-events-dt1`), each built
+    by `python -m elekloader.sdk.build`, and the releases carry the core.
+    reslicer needs all three: core for the machine slots, machine-pages
+    to draw the page and extend the GRID knob past 64, seq-events for the
+    step counter. This is what reslicer 1.0 is built and checked against.
 - **This mod**, from
   [this repository's releases](https://github.com/tonyrewin/reslicer/releases/latest):
-  `reslicer-3.0.elemod` for OS 1.53, `reslicer-3.0-os1.54.elemod` for
+  `reslicer-1.0.elemod` for OS 1.53, `reslicer-1.0-os1.54.elemod` for
   OS 1.54. They are the same mod.
 - **The stock OS file** your unit runs: `Digitakt_OS1.54.syx` or
   `Digitakt_OS1.53.syx`, from
@@ -113,9 +115,9 @@ Ubuntu, `apt install binutils-m68k-linux-gnu gcc-m68k-linux-gnu`; on
 Windows, inside WSL) and elekloader:
 
 ```bash
-python -m elekloader.sdk.build . --stock Digitakt_OS1.53.syx       # -> out/reslicer-3.0.elemod
-python -m elekloader.sdk.build . --stock Digitakt_OS1.54.syx       # -> out/reslicer-3.0-os1.54.elemod
-python -m elekloader.lint out/reslicer-3.0-os1.54.elemod --stock Digitakt_OS1.54.syx \
+python -m elekloader.sdk.build . --stock Digitakt_OS1.53.syx       # -> out/reslicer-1.0.elemod
+python -m elekloader.sdk.build . --stock Digitakt_OS1.54.syx       # -> out/reslicer-1.0-os1.54.elemod
+python -m elekloader.lint out/reslicer-1.0-os1.54.elemod --stock Digitakt_OS1.54.syx \
     --with core.elemod --with machine-pages.elemod --with seq-events-dt1.elemod
 ```
 
@@ -126,8 +128,8 @@ command. The firmware itself is `elekloader.patch`:
 ```bash
 python -m elekloader.patch --stock Digitakt_OS1.54.syx \
     --mod core-4.0-os1.54.elemod --mod machine-pages-1.2-os1.54.elemod \
-    --mod reslicer-3.0-os1.54.elemod --mod seq-events-0.1-os1.54.elemod \
-    --out reslicer-3.0-os1.54.syx --version RSL3
+    --mod reslicer-1.0-os1.54.elemod --mod seq-events-0.1-os1.54.elemod \
+    --out reslicer-1.0-os1.54.syx --version RSL1
 ```
 
 On macOS with Homebrew's toolchain (`brew install m68k-elf-gcc`, which
@@ -168,7 +170,7 @@ SLICE, LEN, PLAY and note pick, the last slice and the wrap, a pitched
 voice, the tempo meter's accuracy over the Digitakt's tempo range, and
 every GRID text. It says nothing about the firmware: for that the mod has
 to be built with [elekloader](https://github.com/irpina/elekloader) and
-played, which has not been done for 3.0.
+played, which has not been done for 1.0.
 
 ## How it works
 
@@ -213,21 +215,24 @@ sets it after the window, so a new note's first block keeps the last
 rate): the frames it eats between two blocks over the 32 samples a block
 holds is its rate at its own pitch, which scales the grid.
 
-## From 2.x
+## Not digislicer
 
-2.x, called digislicer, was a slicer: it analysed transients (GRID =
-AUTO), kept per-sample slice points in a store on the +Drive (`/cfw/
-slices.a`, `.b`), had a waveform editor with zoom, menus and audition,
-added a ping-pong loop (PLAY = PIPO) and a trig slice mode for the
-keyboard. All of that is gone in 3.0: it is 1.5 KB of firmware instead
-of 15 KB, and it does one thing.
+reslicer is its own project and this is its first version. It is not
+digislicer under a new name: digislicer was a **slicer** — it analysed
+transients (GRID = AUTO), kept per-sample slice points in a store on the
++Drive (`/cfw/slices.a`, `.b`), drew a waveform editor with zoom, menus
+and audition, and added a ping-pong loop (PLAY = PIPO) and a trig slice
+mode for the keyboard. None of that is here. reslicer **reslices**:
+there is nothing to find and nothing to keep, the divisions of the beat
+are the whole of the idea, and it is 1.5 KB of firmware where digislicer
+was 15 KB.
 
-A project saved with 2.x still loads: it keeps its RESLICER tracks, and
-they play. The stock SLICE machine was never touched by either version,
-and a 2.x RESLICER track's own slices play as stock slices do (its GRID
-reads as 64). Nothing is lost but the feature itself: `AUTO` is the
-stock equal grid now, `PIPO` is stock `FWD.L`, and the editor and the
-+Drive folder are gone with the files `/cfw/slices.a`, `/cfw/slices.b`.
+The two share a machine id (5) and nothing else, which is deliberate: a
+kit saved with digislicer's machine still loads on reslicer's, and plays.
+The stock SLICE machine was never touched by either, and a digislicer
+track's own slices play as stock slices do (its GRID reads as 64).
+`AUTO` is the stock equal grid now, `PIPO` is stock `FWD.L`.
+
 
 ## Licence
 

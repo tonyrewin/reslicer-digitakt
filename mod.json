@@ -1,5 +1,5 @@
 {
- "id": "reslicer", "version": "3.0",
+ "id": "reslicer", "version": "1.0",
  "license": "GPL-2.0-or-later",
  "title": "reslicer: beat reslicing",
  "category": "Sampling", "author": "tonyrewin",
@@ -25,5 +25,5 @@
  ],
  "machines": [{"id": 5, "descriptor": "rs_machine", "order": 50}],
  "requires": ["core", "machine-pages", "seq-events"],
- "resources": {"core": "3.0", "names": ["machine:5", "param:SLICE GRID=5", "ui:SRC page:GRID past 64"]}
+ "resources": {"core": "4.0", "names": ["machine:5", "param:SLICE GRID=5", "ui:SRC page:GRID past 64"]}
 }
