@@ -17,6 +17,14 @@
  *     or its length is not a whole number of bars. The same slice number
  *     then walks the sample as the pattern plays.
  *
+ * PLAY's fifth value (SHFL) adds SupaTrigga's rearrange and reverse: with
+ * a set chance a note plays a random slice instead of the one it asked
+ * for, and plays it backwards. Both are decided once, when the note
+ * fires, so the pattern stays musical instead of dissolving into
+ * sample-level noise: the window comes every block, 1500 a second, and a
+ * decision each time would be a decision per 32 samples. It needs no
+ * patch of the render, which reads PLAY 4 as it reads FWD.
+ *
  * Nothing is stored, nothing is analysed, no sample is managed and no
  * memory is taken. The SLICE window function at 0x40074df2, hooked by
  * glue.s, is handed the voice and does the arithmetic. The only things
@@ -60,6 +68,45 @@ static const char div_name[6 * NDIV] =
 static const char div_name_note[6 * NDIV] =
     "N1/1\0\0" "N1/2\0\0" "N1/4\0\0" "N1/4T\0"
     "N1/8\0\0" "N1/8T\0"  "N1/16\0"  "N16T\0";
+
+/* ---- PLAY's fifth value: SHFL -------------------------------------------- */
+/* Stock PLAY is 0 REV, 1 REV.L, 2 FWD.L, 3 FWD; 4 and up are ours. The
+ * render reads PLAY for its direction (0 and 1 backwards) and its loop
+ * flag ((PLAY - 1) < 2), and for 4 and up both come out as they do for
+ * FWD, so nothing has to be rewritten for the render to play them
+ * forwards and not to loop them.
+|
+ * SHFL takes the chance, in quarters, and SupaTrigga's two effects:
+ *   4  a quarter   5  a half   6  three quarters   7  every note
+| Each is rolled on its own when a note fires, so a quarter-chance mode
+| gives a quarter of the notes a random slice and a quarter of them
+| backwards, and the two coincide only where both come up. */
+#define SHFL0   4                     /* PLAY's first SHFL value */
+#define NSHFL  4                     /* how many */
+static const u8 shfl_pct[NSHFL] = { 64, 128, 192, 255 };
+
+/* A xorshift, seeded from something that differs between boots. It only
+ * has to not give the same pattern every time the sequencer starts. The
+ * name is a macro so a host test (tests/beat.c) can pin it and expect
+ * exact rolls. */
+static u32 bt_seed;
+#ifndef BT_SEED
+#define BT_SEED bt_seed
+#endif
+
+static u32 bt_rand(void)
+{
+    u32 x = BT_SEED;
+
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    if (!x)                          /* xorshift cannot leave zero, and zero
+                                     * would be the same pattern for ever */
+        x = 0x9e3779b9u;
+    BT_SEED = x;
+    return x;
+}
 
 /* ---- the tempo: samples a step takes -------------------------------------- */
 /* The UI task ticks 30 times a second and the render runs at 48 kHz, so a
@@ -168,11 +215,16 @@ void beat_tick(void)
 static u32 bt_pos[8];              /* the voice's position when it was here */
 static u16 bt_rate[8];             /* the frames it eats a sample, 1/256 */
 static u32 bt_phase[8];            /* NOTE mode: where slice 0 was placed */
+static s16 bt_pick[8];             /* SHFL: the slice this note plays, -1
+                                       while the note keeps the one its
+                                       SLICE knob and note asked for */
+static u8 bt_fresh[8];             /* SHFL: and whether it plays backwards */
 
 u64 beat_win(const s8 *p, u32 note, u32 len, s32 v)
 {
     u32 g = (u8)p[12], i, step, n, from, to, pos, d, r;
-    s32 k, sel = (u8)p[8], L = (u8)p[10], note_mode;
+    s32 k, sel = (u8)p[8], L = (u8)p[10], note_mode, rev;
+    u8 play = (u8)p[2];
 
     if (v < 0 || v > 7)
         return len;                 /* not one of the voices: all of it */
@@ -215,6 +267,36 @@ u64 beat_win(const s8 *p, u32 note, u32 len, s32 v)
             k += n;
     }
 
+    /* SHFL: roll once, when the note fires, not once per block. Both
+     * rolls take the same chance. What came up is latched, because the
+     * window comes again every block and the note has to keep the slice
+     * and the direction it started with: a fresh roll each block would
+     * be a fresh roll per 32 samples.
+     *
+     * The reverse is the window's order, which is how the stock plays a
+     * slice backwards. The render is not told and does not need to be: it
+     * reads PLAY as it reads FWD, and the order in is the order out. */
+    rev = 0;
+    if (play >= SHFL0) {
+        i = play - SHFL0;
+        if (i >= NSHFL)
+            i = NSHFL - 1;
+        if (PP_TRIG(v)) {
+            u32 pct = shfl_pct[i];
+            u32 a = bt_rand();
+            bt_pick[v] = -1;
+            bt_fresh[v] = 0;
+            if ((a & 0xff) < pct)
+                bt_pick[v] = (s16)(bt_rand() % (u32)n);
+            if (((a >> 8) & 0xff) < pct)
+                bt_fresh[v] = 1;
+        }
+        if (bt_pick[v] >= 0)
+            k = bt_pick[v];
+        rev = bt_fresh[v];
+    } else if (play <= 1)            /* stock REV and REV.L */
+        rev = 1;
+
     /* NOTE mode: the grid's zero is the first boundary at or after where
      * the playhead stood when the note fired, so the note begins on a
      * slice and each slice after it is one step (or one 1/8, two steps)
@@ -240,9 +322,40 @@ u64 beat_win(const s8 *p, u32 note, u32 len, s32 v)
     if (to <= from)
         to = from + 1;
 
-    if ((u8)p[2] > 1)               /* PLAY 0 and 1 play it backwards */
-        return ((u64)from << 32) | to;
-    return ((u64)to << 32) | from;
+    /* The order out is the order the stock plays in: forwards is d0 =
+     * where it starts, d1 = where it ends; reversed swaps them. rev holds
+     * what PLAY says and what SHFL rolled. */
+    if (rev)
+        return ((u64)to << 32) | from;
+    return ((u64)from << 32) | to;
+}
+
+/* The PLAY knob's text, from the page glue.s describes: SHFL and its
+ * chance for values 4 and up, 0 for the stock names (REV, REV.L, FWD.L,
+ * FWD). value is 8.8. */
+static const char *const shfl_name[NSHFL] = {
+    "SHFL", "SHFL", "SHFL", "SHFL"
+};
+static const char *const shfl_long[NSHFL] = {
+    "SHUFFLE 25%", "SHUFFLE 50%", "SHUFFLE 75%", "SHUFFLE EVERY"
+};
+
+s32 beat_pfmt(char *buf, s32 value, s32 ctx, s32 machine)
+{
+    const char *s;
+    u32 i = (u32)value >> 8, n;
+
+    (void)machine;
+    if (i < SHFL0)
+        return 0;                   /* the stock's four directions */
+    i -= SHFL0;
+    if (i >= NSHFL)
+        i = NSHFL - 1;
+    s = ctx ? shfl_long[i] : shfl_name[i];    /* ctx 1 is the pop-up */
+    for (n = 0; n < 15 && s[n]; n++)
+        buf[n] = s[n];
+    buf[n] = 0;
+    return 1;
 }
 
 /* The GRID knob's text, from the page glue.s describes: a division's name,

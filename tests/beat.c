@@ -18,6 +18,9 @@ static u32 test_trig;              /* bit v: a voice starts */
 static u32 test_len;
 #define VOICE_POS(v) (test_pos)
 #define PP_TRIG(v) (test_trig >> (v) & 1)
+static u32 test_seed;              /* the shuffle's generator, so a test can
+                                     pin it and expect exact rolls */
+#define BT_SEED test_seed
 #include "../beat.c"
 
 static s8 par[16];
@@ -165,6 +168,140 @@ int main(void)
     printf("%s 1/16 slice 5 is 24000..30000 whatever fired\n",
            ((u32)(w >> 32) == 24000 && (u32)w == 30000) ? "ok  " : "FAIL");
     ok &= (u32)(w >> 32) == 24000 && (u32)w == 30000;
+
+    puts("\n-- PLAY 4-7: SHFL, rolled once per note --");
+    test_pos = 0;
+    test_trig = 0;
+    /* PLAY 0-3 must be exactly as before: 0 and 1 reverse, 2 and 3 not. */
+    {
+        u64 fwd, revv;
+        setp(3, 1, 0, 11);
+        fwd = beat_win(par, 60 << 16, 192000, 0);
+        setp(1, 1, 0, 11);
+        revv = beat_win(par, 60 << 16, 192000, 0);
+        /* d0 is where the voice starts and d1 where it ends: forwards is
+         * start < end, backwards is start > end. */
+        printf("%s PLAY 3 forwards (0..6000), PLAY 1 backwards (6000..0)\n",
+               ((u32)(fwd >> 32) == 0 && (u32)fwd == 6000 &&
+                 (u32)(revv >> 32) == 6000 && (u32)revv == 0) ? "ok  " : "FAIL");
+        ok &= (u32)(fwd >> 32) == 0 && (u32)fwd == 6000 &&
+              (u32)(revv >> 32) == 6000 && (u32)revv == 0;
+    }
+
+    /* PLAY 7 (every note): the notes cover the sample, a quarter of them
+     * play backwards, and no note ever lands on slice 1 every time. */
+    {
+        u32 seen[32], i, n = 0, back = 0, note, different = 0;
+        memset(seen, 0, sizeof seen);
+        memset(bt_pick, 0xff, sizeof bt_pick);
+        memset(bt_fresh, 0, sizeof bt_fresh);
+        test_seed = 0x12345678u;
+        for (note = 0; note < 200; note++) {
+            u64 w2;
+            test_trig = 1;
+            test_pos = 0;
+            setp(7, 1, 0, 11);
+            w2 = beat_win(par, 60 << 16, 192000, 0);
+            test_trig = 0;
+            i = (u32)w2 / 6000;                 /* which slice it landed on */
+            if (i < 32 && !seen[i])
+                seen[i] = 1, n++;
+            /* Reversed: d0 holds the slice's end and d1 its start, and a
+             * slice's start is always below its end. */
+            if ((u32)(w2 >> 32) > (u32)w2)
+                back++;
+            if (i != 0)
+                different++;
+        }
+        printf("   200 notes at SHFL 7: %u distinct slices, %u backwards, "
+               "%u off slice 1\n", n, back, different);
+        printf("%s every note is shuffled: many slices, some backwards\n",
+               (n > 8 && back > 10 && different > 150) ? "ok  " : "FAIL");
+        ok &= n > 8 && back > 10 && different > 150;
+    }
+
+    /* PLAY 4 (a quarter): the reverse must land near a quarter of the
+     * notes, and most notes must still play the slice asked for. Exactly
+     * slice 1 is fewer than three quarters of them, because a quarter of
+     * the notes go backwards whatever the roll says about the slice, and
+     * a random slice lands back on 1 about one time in 32. */
+    {
+        u32 note, same = 0, back = 0, other = 0;
+        memset(bt_pick, 0xff, sizeof bt_pick);
+        memset(bt_fresh, 0, sizeof bt_fresh);
+        test_seed = 0xdeadbeefu;
+        for (note = 0; note < 400; note++) {
+            u64 w2;
+            test_trig = 1;
+            test_pos = 0;
+            setp(4, 1, 0, 11);
+            w2 = beat_win(par, 60 << 16, 192000, 0);
+            test_trig = 0;
+            if ((u32)(w2 >> 32) == 0 && (u32)w2 == 6000)
+                same++;
+            else if ((u32)(w2 >> 32) > (u32)w2)
+                back++;
+            else
+                other++;
+        }
+        printf("   400 notes at SHFL 4: %u kept slice 1 forwards, %u backwards, "
+               "%u another slice\n", same, back, other);
+        printf("%s a quarter reverses about a quarter, and leaves most alone\n",
+               (back > 80 && back < 120 && same > 190 && same < 260) ? "ok  " : "FAIL");
+        ok &= back > 80 && back < 120 && same > 190 && same < 260;
+    }
+
+    /* The roll happens once: the blocks after a note must not change it. */
+    {
+        u64 a, b, c;
+        test_seed = 0x9abcdef0u;
+        test_pos = 0;
+        memset(bt_pick, 0xff, sizeof bt_pick);   /* -1: the asked-for slice */
+        memset(bt_fresh, 0, sizeof bt_fresh);
+        test_trig = 1;
+        setp(7, 1, 0, 11);
+        a = beat_win(par, 60 << 16, 192000, 0);
+        test_trig = 0;
+        b = beat_win(par, 60 << 16, 192000, 0);
+        c = beat_win(par, 60 << 16, 192000, 0);
+        printf("%s the same note keeps its slice across blocks (%u..%u)\n",
+               (a == b && b == c) ? "ok  " : "FAIL",
+               (u32)(a >> 32), (u32)a);
+        ok &= a == b && b == c;
+    }
+
+    /* PLAY 0-3 must stay deterministic: the generator must not be reached. */
+    {
+        u64 a, b;
+        test_seed = 0x11111111u;
+        test_pos = 0;
+        memset(bt_pick, 0xff, sizeof bt_pick);
+        memset(bt_fresh, 0, sizeof bt_fresh);
+        test_trig = 1;
+        setp(3, 3, 0, 11);
+        a = beat_win(par, 60 << 16, 192000, 0);
+        test_trig = 0;
+        setp(3, 3, 0, 11);
+        b = beat_win(par, 60 << 16, 192000, 0);
+        printf("%s the stock directions ignore the generator (slice 3)\n",
+               (a == b && test_seed == 0x11111111u) ? "ok  " : "FAIL");
+        ok &= a == b && test_seed == 0x11111111u;
+    }
+
+    puts("\n-- the PLAY texts --");
+    {
+        char knob[32], pop[32];
+        u32 i;
+        for (i = 0; i < 9; i++) {
+            memset(knob, 0, sizeof knob);
+            memset(pop, 0, sizeof pop);
+            if (beat_pfmt(knob, (s32)i * 256, 0, 0)) {
+                beat_pfmt(pop, (s32)i * 256, 1, 0);
+                printf("PLAY %u  knob %-6s pop-up %s\n", i, knob, pop);
+            } else
+                printf("PLAY %u  (stock direction)\n", i);
+        }
+    }
 
     puts("\n-- the checks --");
     bt_spp = 6000; bt_rate[0] = 256;

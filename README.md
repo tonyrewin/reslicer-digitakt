@@ -24,6 +24,23 @@ arithmetic. A track on the stock SLICE machine is untouched.
   RESLICER, below SLICE, in the list. Its SRC page is SLICE's and it
   plays as SLICE, so everything SLICE has works on it: TUNE, PLAY, BR,
   SAMP, SLICE, LEN, LEVEL, slice locks, the keyboard, recording.
+- **PLAY's fifth value is SHFL: the shuffle.** Past FWD the knob takes a
+  chance, in quarters — `SHFL` is 25, 50, 75 and every note (the pop-up
+  says which). With it, a note sometimes plays a **random slice** instead
+  of the one its SLICE knob and note asked for, and sometimes plays it
+  **backwards**; each is rolled on its own, so a quarter-chance mode gives
+  a quarter of the notes a random slice and a quarter of them backwards,
+  and the two coincide only where both come up. It is SupaTrigga's
+  rearrange and reverse, and needs nothing of its machinery: the reverse
+  is the window's order, which is how the stock plays a slice backwards,
+  and the render reads PLAY 4 as it reads FWD, so no patch of the render
+  is needed.
+  - Both are decided **once, when the note fires**, and held for the
+    note. The window comes every block, 1500 a second; a roll each block
+    would be a roll per 32 samples, and the pattern would dissolve into
+    noise instead of rearranging musically.
+  - It is heard only where notes fire one after another (continuous
+    16ths). On one long note to the bar it does nothing.
 - **GRID turns past 64 into the beat.** On this machine the GRID knob
   runs from 4, 8, 16, 32, 64 (the stock values) into the divisions of the
   beat, twice over:
@@ -66,12 +83,26 @@ arithmetic. A track on the stock SLICE machine is untouched.
   ONESHOT or to another machine keeps its GRID value, which the stock
   firmware reads as its largest grid (64).
 - **It leaves room for other mods.** Of the 128 KB of RAM that
-  elekloader's mods share, reslicer takes 104 bytes, and 1.6 KB of the
-  firmware's own code space (952 in `beat.c`, 540 in `glue.s`, measured
-  with `m68k-elf-gcc -Os`; the built `.elemod` says `.run` 1444,
-  `.bss` 104). A firmware with reslicer, core, machine-pages and
-  seq-events links at 18 772 of 262 144 bytes of RAM, 0 of 2304 of fast
-  SRAM. digislicer, the older slicer, took 15 KB.
+  elekloader's mods share, reslicer takes 132 bytes, and 2.0 KB of the
+  firmware's own code space (1357 in `beat.c`, 540 in `glue.s`, measured
+  with `m68k-elf-gcc -Os`; the built `.elemod` says `.run` 1831,
+  `.bss` 132). A firmware with reslicer, core, machine-pages and
+  seq-events links at 19 104 of 262 144 bytes of RAM, 0 of 2304 of fast
+  SRAM; with [ram-machines](https://github.com/repeat98/modwerk) (RAM
+  record and playback) beside it, 23 700. digislicer, the older slicer,
+  took 15 KB.
+
+- **RAM record and playback, from ram-machines.** This mod reslices
+  samples; it does not record them. Taking is
+  [ram-machines](https://github.com/repeat98/modwerk/tree/main/sdk/digitakt/modules/ram-machines)
+  (GPL-2.0-or-later, sumedho and irpina), a separate module that adds
+  `RAM-R1` (records a take from the master mix or an input into RAM) and
+  `RAM-P1` (plays it with the native sample controls). Install both and
+  you can reslice what you just recorded. They share no code, take
+  different machine ids (5 against 120 and 121) and patch different sites,
+  so they sit in one build without either knowing about the other; that
+  was checked by building it and by the linter. Their machine renders as
+  ONESHOT, not SLICE, so **RAM-P1 is not resliced** — see below.
 
 ## Install
 
@@ -186,7 +217,14 @@ It covers the division ladder against the beat, both grid placements
 (SAMPLE and the N latch, including a note that fires off a boundary and
 one that fires on it), which slice the voice's SLICE, LEN, PLAY and note
 pick, the last slice and the wrap, a pitched voice, the tempo meter's
-accuracy over the Digitakt's tempo range, and every GRID text. It says nothing about the firmware: for that the mod has
+accuracy over the Digitakt's tempo range, and every GRID and PLAY text.
+
+The shuffle is checked with a pinned generator, so the rolls are exact:
+that PLAY 0-3 stay deterministic and never reach it, that PLAY 7 covers
+all 32 slices and reverses nearly every note, that PLAY 4's quarter lands
+near a quarter of the notes reversed and leaves most of the rest alone,
+and that a note keeps its slice and its direction across the blocks that
+follow it. It says nothing about the firmware: for that the mod has
 to be built with [elekloader](https://github.com/irpina/elekloader) and
 played, which has not been done for 1.0.
 

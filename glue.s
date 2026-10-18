@@ -43,7 +43,8 @@ rs_machine:
 rs_page:
         CM_UI   3                                       | SLICE's page
         CM_KNOB                                         | A: TUNE
-        CM_KNOB                                         | B: PLAY
+        CM_KNOB flags=CM_RANGE, min=0, max=0x400, fmt=beat_pfmt
+                                                        | B: PLAY, to SHFL
         CM_KNOB                                         | C: BR
         CM_KNOB                                         | D: SAMP
         CM_KNOB                                         | E: SLICE
