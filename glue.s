@@ -27,7 +27,7 @@
         .balign 4
         .globl  dts_machine
 dts_machine:
-        CM_MACHINE DTS_ID, str_dsl, str_dts_short, dts_icon, 3, 3, dts_page
+        CM_MACHINE DTS_ID, str_dts, str_dts_short, dts_icon, 3, 3, dts_page
         .balign 4
 dts_page:
         CM_UI   3                                       | SLICE's page

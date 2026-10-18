@@ -70,7 +70,7 @@ You need three things:
     core for the machine slots, machine-pages to draw the page and extend
     the GRID knob past 64, seq-events for the step counter.
 - **This mod**, from
-  [this repository's releases](https://github.com/irpina/dtslicer/releases/latest):
+  [this repository's releases](https://github.com/tonyrewin/dtslicer/releases/latest):
   `dtslicer-3.0.elemod` for OS 1.53, `dtslicer-3.0-os1.54.elemod` for
   OS 1.54. They are the same mod.
 - **The stock OS file** your unit runs: `Digitakt_OS1.54.syx` or
