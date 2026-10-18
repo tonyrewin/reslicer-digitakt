@@ -1,5 +1,5 @@
 | SPDX-License-Identifier: GPL-2.0-or-later
-| dtslicer: beat reslicing for the SLICE machine (beat.c); the glue: the
+| reslicer: beat reslicing for the SLICE machine (beat.c); the glue: the
 | machine it adds and the patched SLICE window function (see README.md).
         .ifdef  OS154                   | the Digitakt mk1 1.54 (mod.json's port)
         .include "os154.inc"
@@ -10,7 +10,7 @@
 
         .section .run, "ax"
 
-| ---- the DTSLICER machine ---------------------------------------------------|
+| ---- the RESLICER machine ---------------------------------------------------|
 | Machine 5, through core's machine slots (core 2.1, docs/ADAPTING.md "SRC
 | machines"): SLICE's parameters and SRC page, and it plays as SLICE (the
 | render sees 3), so everything SLICE has works on it. What this mod adds
@@ -23,13 +23,13 @@
 | ONESHOT or to another machine loses the divisions with the machine: the
 | knob keeps the value, which the stock firmware reads as its largest
 | grid (64).
-        .equ    DTS_ID, 5
+        .equ    RS_ID, 5
         .balign 4
-        .globl  dts_machine
-dts_machine:
-        CM_MACHINE DTS_ID, str_dts, str_dts_short, dts_icon, 3, 3, dts_page
+        .globl  rs_machine
+rs_machine:
+        CM_MACHINE RS_ID, str_rs, str_rs_short, rs_icon, 3, 3, rs_page
         .balign 4
-dts_page:
+rs_page:
         CM_UI   3                                       | SLICE's page
         CM_KNOB                                         | A: TUNE
         CM_KNOB                                         | B: PLAY
@@ -49,25 +49,25 @@ dts_page:
 |   ##.##...##.
 |   #..#....#..
 |   #..#....#..
-dts_icon:
-        .long   BMP_VT, 11, 7, 1, dts_icon_px, dts_icon_mask, 0
-dts_icon_px:
+rs_icon:
+        .long   BMP_VT, 11, 7, 1, rs_icon_px, rs_icon_mask, 0
+rs_icon_px:
         .long   0xfe000000, 0x38000000, 0x10000000, 0xfe000000, 0x38000000
         .long   0x10000000, 0x10000000, 0x00000000, 0xfe000000, 0x38000000
         .long   0x10000000
-dts_icon_mask:
+rs_icon_mask:
         .long   0xfe000000, 0xfe000000, 0xfe000000, 0xfe000000, 0xfe000000
         .long   0xfe000000, 0xfe000000, 0xfe000000, 0xfe000000, 0xfe000000
         .long   0xfe000000
-str_dts:        .asciz  "DTSLICER"
-str_dts_short:  .asciz  "DTSL"
+str_rs:        .asciz  "RESLICER"
+str_rs_short:  .asciz  "RSLC"
         .balign 2
 
 | ---- the slice window: GRID = BEAT (beat.c) ----------------------------------|
 | At 0x40074df2 (was: lea -24(sp),sp ; moveq #94,d1), the entry of the
 | SLICE window function, by jmp: (sp) = return, 4 p (the voice's
 | parameters: PLAY at +2, GRID at +12), 8 note, 12 length, 16 v (the
-| voice). A SLICE voice runs the stock code. A DTSLICER voice with GRID
+| voice). A SLICE voice runs the stock code. A RESLICER voice with GRID
 | 5 or up, and a tempo measured, goes to beat_win (the same arguments,
 | the same d0/d1 result); anything else runs the stock code. The FAST
 | AUDIO copy of the block inherits this jmp (it copies the patched
