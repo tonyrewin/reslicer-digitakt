@@ -89,21 +89,7 @@ arithmetic. A track on the stock SLICE machine is untouched.
   with `m68k-elf-gcc -Os`; the built `.elemod` says `.run` 1831,
   `.bss` 132). A firmware with reslicer, core, machine-pages and
   seq-events links at 19 104 of 262 144 bytes of RAM, 0 of 2304 of fast
-  SRAM; with [ram-machines](https://github.com/repeat98/modwerk) (RAM
-  record and playback) beside it, 23 700. digislicer, the older slicer,
-  took 15 KB.
-
-- **RAM record and playback, from ram-machines.** This mod reslices
-  samples; it does not record them. Taking is
-  [ram-machines](https://github.com/repeat98/modwerk/tree/main/sdk/digitakt/modules/ram-machines)
-  (GPL-2.0-or-later, sumedho and irpina), a separate module that adds
-  `RAM-R1` (records a take from the master mix or an input into RAM) and
-  `RAM-P1` (plays it with the native sample controls). Install both and
-  you can reslice what you just recorded. They share no code, take
-  different machine ids (5 against 120 and 121) and patch different sites,
-  so they sit in one build without either knowing about the other; that
-  was checked by building it and by the linter. Their machine renders as
-  ONESHOT, not SLICE, so **RAM-P1 is not resliced** — see below.
+  SRAM. digislicer, the older slicer, took 15 KB.
 
 ## Install
 
@@ -144,8 +130,8 @@ Then build your OS in elekloader's window:
    add [digihealth](https://github.com/irpina/digihealth) (FAST AUDIO and
    SYSTEM INFO), install and tick it as well.
 4. **OS version shown**: the 4 characters the unit will show, for example
-   `RSL2`. Pick any that says what is in the build; reslicer's alone is
-   `RSL2`, with ram-machines beside it `RSR2`.
+   `RSL2`. Any four characters will do; it is how you tell one custom
+   firmware from another.
 5. **BUILD FIRMWARE**, and save the `.syx`. elekloader verifies it before
    writing it.
 
