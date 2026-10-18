@@ -51,7 +51,10 @@ arithmetic. A track on the stock SLICE machine is untouched.
 - **It leaves room for other mods.** Of the 128 KB of RAM that
   elekloader's mods share, reslicer takes 72 bytes, and 1.5 KB of the
   firmware's own code space (934 in `beat.c`, 540 in `glue.s`, measured
-  with `m68k-elf-gcc -Os`). Version 2.x, the slice editor, took 15 KB.
+  with `m68k-elf-gcc -Os`; the built `.elemod` says `.run` 1356,
+  `.bss` 72). A firmware with reslicer, core, machine-pages and
+  seq-events links at 18 740 of 262 144 bytes of RAM, 0 of 2304 of fast
+  SRAM. Version 2.x, the slice editor, took 15 KB.
 
 ## Install
 
@@ -113,7 +116,26 @@ Windows, inside WSL) and elekloader:
 python -m elekloader.sdk.build . --stock Digitakt_OS1.53.syx       # -> out/reslicer-3.0.elemod
 python -m elekloader.sdk.build . --stock Digitakt_OS1.54.syx       # -> out/reslicer-3.0-os1.54.elemod
 python -m elekloader.lint out/reslicer-3.0-os1.54.elemod --stock Digitakt_OS1.54.syx \
-    --with core-3.0-os1.54.elemod --with machine-pages-1.0-os1.54.elemod --with seq-events-1.0-os1.54.elemod
+    --with core.elemod --with machine-pages.elemod --with seq-events-dt1.elemod
+```
+
+The dependencies are mods in elekloader's own source (`mods/core`,
+`mods/machine-pages`, `mods/seq-events-dt1`), each built by the same
+command. The firmware itself is `elekloader.patch`:
+
+```bash
+python -m elekloader.patch --stock Digitakt_OS1.54.syx \
+    --mod core-4.0-os1.54.elemod --mod machine-pages-1.2-os1.54.elemod \
+    --mod reslicer-3.0-os1.54.elemod --mod seq-events-0.1-os1.54.elemod \
+    --out reslicer-3.0-os1.54.syx --version RSL3
+```
+
+On macOS with Homebrew's toolchain (`brew install m68k-elf-gcc`, which
+names its tools `m68k-elf-as` and not `m68k-linux-gnu-as`), point
+elekloader at it:
+
+```bash
+export ELEKLOADER_CROSS=m68k-elf-
 ```
 
 To measure the mod without building it (`m68k-elf-gcc`, or `m68k-linux-gnu-gcc`):
