@@ -2,8 +2,9 @@
 
 **Beat reslicing for the Digitakt (mk1).** SLICE cuts a sample into 4, 8,
 16, 32 or 64 equal slices. reslicer gives the same knob the divisions of
-the beat instead: **1/1, 1/2, 1/4, 1/8, 1/8T, 1/16, 1/32T** and down to
-1/64T, at the project's tempo. A slice is one step of the pattern apart
+the beat instead: **1/1, 1/2, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T**, at the
+project's tempo, placed from the sample's start or from the note's, and
+PLAY takes a shuffle on top. A slice is one step of the pattern apart
 from the next, so a loop is resliced as it is heard: the slices keep
 their place when the tempo changes, and a pitched sample's slices are a
 beat long *as played*.
@@ -143,7 +144,8 @@ Then build your OS in elekloader's window:
    add [digihealth](https://github.com/irpina/digihealth) (FAST AUDIO and
    SYSTEM INFO), install and tick it as well.
 4. **OS version shown**: the 4 characters the unit will show, for example
-   `DTS3`.
+   `RSL2`. Pick any that says what is in the build; reslicer's alone is
+   `RSL2`, with ram-machines beside it `RSR2`.
 5. **BUILD FIRMWARE**, and save the `.syx`. elekloader verifies it before
    writing it.
 
@@ -177,7 +179,7 @@ command. The firmware itself is `elekloader.patch`:
 python -m elekloader.patch --stock Digitakt_OS1.54.syx \
     --mod core-4.0-os1.54.elemod --mod machine-pages-1.2-os1.54.elemod \
     --mod reslicer-1.0-os1.54.elemod --mod seq-events-0.1-os1.54.elemod \
-    --out reslicer-1.0-os1.54.syx --version RSL1
+    --out reslicer-1.0-os1.54.syx --version RSL2
 ```
 
 On macOS with Homebrew's toolchain (`brew install m68k-elf-gcc`, which
@@ -199,7 +201,7 @@ m68k-elf-gcc -Os -I <elekloader>/sdk/include -c glue.s -o glue.o && m68k-elf-siz
 |---|---|
 | `mod.json` | the mod: its one patched site, its handlers, its machine, what it requires |
 | `beat.c` | the divisions, the tempo measurement, the slice window |
-| `glue.s` | the RESLICER machine (its core descriptor, icon and page: GRID's range to 1/64T) and the patched SLICE window function |
+| `glue.s` | the RESLICER machine (its core descriptor, icon and page: GRID's range to 20, PLAY's to SHFL) and the patched SLICE window function |
 | `os153.inc`, `os154.inc` | the stock locations `glue.s` uses, for each OS (1.54's port defines `OS154`) |
 | `os153.h`, `os154.h` | the same for `beat.c` |
 | `tests/beat.c` | `beat.c`'s arithmetic on the host: no firmware, no device |
@@ -282,7 +284,7 @@ transients (GRID = AUTO), kept per-sample slice points in a store on the
 and audition, and added a ping-pong loop (PLAY = PIPO) and a trig slice
 mode for the keyboard. None of that is here. reslicer **reslices**:
 there is nothing to find and nothing to keep, the divisions of the beat
-are the whole of the idea, and it is 1.5 KB of firmware where digislicer
+are the whole of the idea, and it is 2.0 KB of firmware where digislicer
 was 15 KB.
 
 The two share a machine id (5) and nothing else, which is deliberate: a
